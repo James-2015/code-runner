@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>在线评测平台 · Judge0 Batch 加速版</title>
+<style>
+    * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI','Fira Code',monospace; }
+    body { background: radial-gradient(circle at 20% 10%, #0d1526, #05080f 90%); min-height:100vh; padding:0.8rem; color:#e2ecff; }
+    .app { max-width:1500px; margin:0 auto; background:rgba(12,18,30,0.96); border:1px solid #24344f; border-radius:1.2rem; padding:1rem 1.2rem 1.2rem; box-shadow:0 25px 60px rgba(0,0,0,0.9); }
+    h1 { font-size:1.3rem; font-weight:600; background:linear-gradient(135deg,#bdd4ff,#8fb5ff); -webkit-background-clip:text; background-clip:text; color:transparent; text-align:center; margin-bottom:0.8rem; }
+    .toolbar { display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; background:#0f1726; border:1px solid #24344f; border-radius:0.8rem; padding:0.5rem 0.7rem; margin-bottom:0.8rem; }
+    .toolbar select, .toolbar button { font-family:'Fira Code',monospace; font-size:0.78rem; background:#182234; color:#c9dcff; border:1px solid #2c4062; border-radius:0.5rem; padding:0.4rem 0.8rem; cursor:pointer; transition:0.12s; outline:none; }
+    .toolbar select:hover, .toolbar button:hover { background:#1f2d45; border-color:#5a7fc0; }
+    .toolbar button.primary { background:linear-gradient(145deg,#2f5288,#1d3460); border-color:#5a7fc0; color:#fff; font-weight:700; }
+    .toolbar button.primary:hover { background:linear-gradient(145deg,#3a66a0,#234580); }
+    .toolbar button.primary:disabled { opacity:0.5; cursor:not-allowed; }
+    .toolbar .spacer { flex:1; }
+    .toolbar .badge { font-size:0.65rem; color:#7e93bd; font-family:'Fira Code',monospace; padding:0.18rem 0.55rem; border:1px dashed #2c4062; border-radius:1rem; }
+    .toolbar .badge.local { color:#7ae0b0; border-color:#3a7a5a; }
+    .toolbar .badge.remote { color:#7aa2ff; border-color:#4a6aaa; }
+    .main-split { display:flex; gap:0.8rem; min-height:500px; flex-wrap:wrap; }
+    .editor-col { flex:1 1 480px; display:flex; flex-direction:column; gap:0.6rem; min-width:300px; }
+    .output-col { flex:1 1 480px; display:flex; flex-direction:column; gap:0.6rem; min-width:300px; }
+    .pane { background:#0b101a; border:1px solid #223049; border-radius:0.8rem; overflow:hidden; display:flex; flex-direction:column; }
+    .pane-header { display:flex; align-items:center; justify-content:space-between; background:#121b2b; padding:0.45rem 0.8rem; border-bottom:1px solid #223049; font-family:'Fira Code',monospace; font-size:0.72rem; color:#8aa4d4; flex-wrap:wrap; gap:0.4rem; }
+    .pane-header .actions { display:flex; gap:0.4rem; }
+    .pane-header .actions button { background:#1a2740; border:1px solid #2c4062; color:#b8d4ff; border-radius:0.4rem; padding:0.15rem 0.5rem; font-size:0.62rem; font-family:'Fira Code',monospace; cursor:pointer; }
+    .pane-header .actions button:hover { background:#24365a; }
+    textarea.code-editor { width:100%; flex:1; min-height:380px; resize:none; background:#0b101a; color:#d2e2ff; border:none; outline:none; padding:0.8rem 1rem; font-family:'Fira Code','Cascadia Code',monospace; font-size:0.8rem; line-height:1.55; tab-size:4; white-space:pre; overflow:auto; }
+    pre.output-view { width:100%; flex:1; min-height:380px; max-height:600px; overflow:auto; background:#0b101a; color:#cde0ff; margin:0; padding:0.8rem 1rem; font-family:'Fira Code',monospace; font-size:0.8rem; line-height:1.55; white-space:pre-wrap; }
+    .output-view .ok { color:#7ae0b0; } .output-view .err { color:#ff9eb5; } .output-view .info { color:#8aa4d4; } .output-view .cmd { color:#c792ea; } .output-view .warn { color:#ffcc7a; }
+    .preview-frame { width:100%; flex:1; min-height:380px; max-height:600px; height:380px; border:none; background:#fff; display:block; }
+    .preview-container { position:relative; flex:1; display:none; min-height:380px; }
+    .preview-container.active { display:flex; flex-direction:column; }
+    .preview-hint { position:absolute; top:0.4rem; right:0.4rem; background:rgba(20,30,50,0.85); color:#8aa4d4; font-family:'Fira Code',monospace; font-size:0.6rem; padding:0.15rem 0.5rem; border-radius:0.4rem; border:1px solid #2c4062; pointer-events:none; }
+    .mode-bar { display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; background:#0f1726; border:1px solid #24344f; border-radius:0.8rem; padding:0.45rem 0.9rem; margin-bottom:0.8rem; }
+    .mode-bar .label { font-size:0.72rem; color:#7e93bd; font-family:'Fira Code',monospace; }
+    .mode-option { display:flex; align-items:center; gap:0.3rem; background:#182234; border:1px solid #2c4062; border-radius:2rem; padding:0.25rem 0.8rem; cursor:pointer; transition:0.12s; font-family:'Fira Code',monospace; font-size:0.72rem; color:#b6caf0; user-select:none; }
+    .mode-option:hover { background:#1f2d45; border-color:#5a7fc0; }
+    .mode-option.active { background:#2f5288; border-color:#7aa2ff; color:#fff; font-weight:600; box-shadow:0 0 12px rgba(90,140,255,0.4); }
+    .mode-option .ico { font-size:0.85rem; }
+    .mode-desc { font-size:0.65rem; color:#6a85b0; font-family:'Fira Code',monospace; margin-left:auto; }
+    .samples-panel { background:#0f1726; border:1px solid #24344f; border-radius:0.8rem; margin-top:0.8rem; overflow:hidden; }
+    .samples-header { display:flex; align-items:center; justify-content:space-between; padding:0.45rem 0.9rem; background:#121b2b; border-bottom:1px solid #223049; font-family:'Fira Code',monospace; font-size:0.72rem; color:#8aa4d4; cursor:pointer; user-select:none; }
+    .samples-header:hover { background:#152034; }
+    .samples-header .left { display:flex; align-items:center; gap:0.5rem; }
+    .samples-header .arrow { transition:transform 0.2s; font-size:0.7rem; }
+    .samples-panel.open .samples-header .arrow { transform:rotate(90deg); }
+    .samples-header .count-badge { background:#2f5288; color:#fff; border-radius:1rem; padding:0 0.5rem; font-size:0.62rem; min-width:1.2rem; text-align:center; }
+    .samples-header .summary-badge { font-size:0.62rem; padding:0.15rem 0.6rem; border-radius:1rem; font-family:'Fira Code',monospace; }
+    .summary-badge.ac { background:#1a3a2a; color:#7ae0b0; border:1px solid #3a7a5a; }
+    .summary-badge.wa { background:#3b1f2a; color:#ff9eb5; border:1px solid #aa4e6a; }
+    .summary-badge.partial { background:#3a2a1a; color:#ffcc7a; border:1px solid #7a5a3a; }
+    .samples-body { max-height:0; overflow:hidden; transition:max-height 0.25s ease; }
+    .samples-panel.open .samples-body { max-height:800px; overflow-y:auto; padding:0.6rem 0.9rem 0.8rem; }
+    .sample-item { background:#0b101a; border:1px solid #223049; border-radius:0.6rem; padding:0.5rem 0.7rem; margin-bottom:0.5rem; display:grid; grid-template-columns:0.5fr 1fr 1fr 0.6fr auto; gap:0.5rem; align-items:start; }
+    @media(max-width:800px){ .sample-item{ grid-template-columns:1fr 1fr; } }
+    .sample-item .field { display:flex; flex-direction:column; gap:0.2rem; min-width:0; }
+    .sample-item .field label { font-size:0.6rem; color:#7e93bd; font-family:'Fira Code',monospace; display:flex; align-items:center; gap:0.3rem; }
+    .sample-item .field .status-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+    .status-dot.pass { background:#7ae0b0; box-shadow:0 0 6px #7ae0b0; }
+    .status-dot.fail { background:#ff9eb5; box-shadow:0 0 6px #ff9eb5; }
+    .status-dot.wait { background:#ffcc7a; box-shadow:0 0 6px #ffcc7a; animation:pulse 1s infinite; }
+    @keyframes pulse { 50%{opacity:0.4;} }
+    .sample-item .field textarea, .sample-item .field input { background:#0c1220; border:1px solid #2c4062; border-radius:0.4rem; color:#d2e2ff; padding:0.3rem 0.5rem; font-size:0.72rem; font-family:'Fira Code',monospace; resize:vertical; min-height:2.2rem; outline:none; width:100%; }
+    .sample-item .field textarea:focus, .sample-item .field input:focus { border-color:#6f9aff; }
+    .sample-item .field.idx { align-items:center; justify-content:center; font-size:1.1rem; font-weight:700; color:#5a7fc0; }
+    .sample-item .ops { display:flex; flex-direction:column; gap:0.3rem; align-items:stretch; }
+    .sample-item .ops button { background:#1a2740; border:1px solid #2c4062; color:#b8d4ff; border-radius:0.4rem; padding:0.25rem 0.5rem; font-size:0.62rem; font-family:'Fira Code',monospace; cursor:pointer; white-space:nowrap; }
+    .sample-item .ops button:hover { background:#24365a; }
+    .sample-item .ops button.del { background:#3a1a24; border-color:#7a3a4a; color:#ff9eb5; }
+    .sample-item .ops button.del:hover { background:#4d2230; }
+    .sample-item .result-row { grid-column:1/-1; display:flex; flex-wrap:wrap; gap:0.5rem; padding-top:0.3rem; border-top:1px dashed #1e2c42; margin-top:0.2rem; }
+    .result-cell { background:#0e1524; border:1px solid #223049; border-radius:0.4rem; padding:0.25rem 0.6rem; font-size:0.65rem; font-family:'Fira Code',monospace; color:#a8bde0; flex:1; min-width:150px; }
+    .result-cell.ok { border-color:#3a7a5a; color:#7ae0b0; }
+    .result-cell.err { border-color:#7a3a4a; color:#ff9eb5; }
+    .result-cell .lbl { color:#6a85b0; font-size:0.6rem; display:block; margin-bottom:0.15rem; }
+    .result-cell pre { font-family:'Fira Code',monospace; font-size:0.68rem; white-space:pre-wrap; margin:0; max-height:100px; overflow:auto; }
+    .empty-samples { text-align:center; color:#5f7aa8; font-size:0.7rem; font-family:'Fira Code',monospace; padding:0.8rem; }
+    .status-bar { margin-top:0.6rem; font-family:'Fira Code',monospace; font-size:0.7rem; color:#6a85b0; display:flex; gap:0.8rem; flex-wrap:wrap; }
+    .status-bar .speed { color:#7ae0b0; }
+    .toast { position:fixed; bottom:1.2rem; left:50%; transform:translateX(-50%) translateY(100px); background:#1e3458; color:#e0f0ff; padding:0.5rem 1.4rem; border-radius:3rem; border:1px solid #5f8ae0; font-family:'Fira Code',monospace; font-size:0.75rem; opacity:0; transition:0.22s; pointer-events:none; z-index:999; }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+    .hint { margin-top:0.8rem; padding:0.6rem 0.9rem; background:#0e1524; border:1px solid #223049; border-radius:0.6rem; font-size:0.7rem; color:#7e93bd; font-family:'Fira Code',monospace; line-height:1.6; }
+    .hint strong { color:#a8c4ff; }
+</style>
+</head>
+<body>
+<div class="app">
+    <h1>▶ 在线评测平台 · Batch 加速版</h1>
+
+    <div class="toolbar">
+        <label for="langSelect" style="font-size:0.72rem;color:#7e93bd;font-family:'Fira Code',monospace;">语言</label>
+        <select id="langSelect"></select>
+        <button class="primary" id="runBtn">▶ 自由运行</button>
+        <button id="judgeBtn" style="background:#1a3a2a;border-color:#3a7a5a;color:#7ae0b0;font-weight:700;">🏁 判题（Batch）</button>
+        <button id="clearBtn">🗑 清空输出</button>
+        <div class="spacer"></div>
+        <span class="badge" id="engineBadge">引擎：—</span>
+    </div>
+
+    <div class="mode-bar">
+        <span class="label">🏁 赛制</span>
+        <div class="mode-option active" data-mode="acm"><span class="ico">🔴</span> ACM（严格全过）</div>
+        <div class="mode-option" data-mode="oi"><span class="ico">🟡</span> OI（按点给分）</div>
+        <span class="mode-desc" id="modeDesc">ACM：所有测试点必须全部通过才算 AC，任一失败即整题 WA</span>
+    </div>
+
+    <div class="main-split">
+        <div class="editor-col">
+            <div class="pane" style="flex:1;">
+                <div class="pane-header"><span>📝 代码编辑器</span><div class="actions"><button id="exampleBtn">加载示例</button></div></div>
+                <textarea id="codeEditor" class="code-editor" spellcheck="false"></textarea>
+            </div>
+        </div>
+        <div class="output-col">
+            <div class="pane" style="flex:1;">
+                <div class="pane-header"><span id="outputTitle">📤 运行输出</span><div class="actions"><button id="copyOutputBtn">复制</button></div></div>
+                <pre id="outputView" class="output-view"></pre>
+                <div id="previewContainer" class="preview-container">
+                    <span class="preview-hint">实时渲染预览</span>
+                    <iframe id="previewFrame" class="preview-frame" sandbox="allow-scripts allow-same-origin"></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="samples-panel open" id="samplesPanel">
+        <div class="samples-header" id="samplesHeader">
+            <div class="left"><span class="arrow">▶</span><span>📋 测试样例 / 评测数据</span><span class="count-badge" id="sampleCount">0</span><span class="summary-badge" id="summaryBadge" style="display:none;">—</span></div>
+            <div class="actions" style="display:flex;gap:0.4rem;">
+                <button id="addSampleBtn" style="background:#1a3a2a;border-color:#3a7a5a;color:#7ae0b0;border-radius:0.4rem;padding:0.2rem 0.6rem;font-size:0.65rem;font-family:'Fira Code',monospace;cursor:pointer;">+ 添加样例</button>
+            </div>
+        </div>
+        <div class="samples-body" id="samplesBody">
+            <div class="empty-samples" id="emptySamples">暂无评测数据，点击「+ 添加样例」</div>
+            <div id="sampleList"></div>
+        </div>
+    </div>
+
+    <div class="status-bar"><span id="statusText">就绪</span><span id="timeText"></span><span id="speedText" class="speed"></span></div>
+    <div class="hint">
+        <strong>加速原理：</strong><br>
+        • 判题时用 <strong>Judge0 Batch API</strong>，把所有测试点打包成一次 HTTP 请求提交，轮询时也批量查询，网络往返从 2N 次降到 2 次。<br>
+        • 自由运行仍用单次提交，但轮询间隔激进（50ms 起，指数退避至 800ms）。<br>
+        • 语言列表来自 Judge0 CE 官方 <code>/languages</code> 端点，共 60+ 种，这里精选了常用和经典语言。<br>
+        • <strong>CORS 提醒</strong>：Judge0 CE 公共实例的 CORS 策略在不同网络环境下表现可能不一致。如果浏览器控制台报跨域错误，说明您的网络被拦截，需要代理或自建 Judge0。
+    </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+    // ============================================================
+    // 语言列表（Judge0 CE 官方 /languages 端点返回的 ID）
+    // ============================================================
+    const LANGUAGES = [
+        { id:'cpp', name:'C++ (GCC 14)', judge0Id:105, ext:'cpp',
+          example:'#include <iostream>\nint main() {\n    int a, b;\n    if (std::cin >> a >> b) std::cout << a + b << std::endl;\n    return 0;\n}' },
+        { id:'c', name:'C (GCC 14)', judge0Id:103, ext:'c',
+          example:'#include <stdio.h>\nint main(void) {\n    int a, b;\n    if (scanf("%d %d", &a, &b) == 2) printf("%d\\n", a + b);\n    return 0;\n}' },
+        { id:'python', name:'Python 3', judge0Id:71, ext:'py',
+          example:'import sys\nnums = list(map(int, sys.stdin.read().split()))\nprint(sum(nums))' },
+        { id:'java', name:'Java (JDK 17)', judge0Id:91, ext:'java',
+          example:'import java.util.Scanner;\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        if (sc.hasNextInt()) {\n            int a = sc.nextInt(), b = sc.nextInt();\n            System.out.println(a + b);\n        }\n    }\n}' },
+        { id:'javascript', name:'JavaScript (Node 22)', judge0Id:102, ext:'js',
+          example:'const input = require("fs").readFileSync("/dev/stdin", "utf8").trim();\nconst nums = input.split(/\\s+/).map(Number);\nconsole.log(nums.reduce((a,b)=>a+b, 0));' },
+        { id:'html', name:'HTML/CSS/JS', mode:'preview', ext:'html',
+          example:'<!DOCTYPE html>\n<html><head><meta charset="UTF-8">\n<style>body{font-family:sans-serif;background:linear-gradient(135deg,#667eea,#764ba2);min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0}.card{background:white;padding:2rem 3rem;border-radius:1rem;box-shadow:0 10px 30px rgba(0,0,0,0.3);text-align:center}h1{color:#333}p{color:#666}</style>\n</head><body><div class="card"><h1>Hello Judge0</h1><p>实时预览</p></div></body></html>' },
+        { id:'typescript', name:'TypeScript', judge0Id:101, ext:'ts',
+          example:'const input = require("fs").readFileSync("/dev/stdin", "utf8").trim();\nconst nums = input.split(/\\s+/).map(Number);\nconsole.log(nums.reduce((a: number, b: number) => a + b, 0));' },
+        { id:'go', name:'Go 1.23', judge0Id:107, ext:'go',
+          example:'package main\nimport "fmt"\nfunc main() {\n    var a, b int\n    if _, err := fmt.Scan(&a, &b); err == nil {\n        fmt.Println(a + b)\n    }\n}' },
+        { id:'rust', name:'Rust', judge0Id:73, ext:'rs',
+          example:'use std::io;\nfn main() {\n    let mut s = String::new();\n    io::stdin().read_line(&mut s).unwrap();\n    let v: Vec<i32> = s.split_whitespace().map(|x| x.parse().unwrap()).collect();\n    if v.len() >= 2 { println!("{}", v[0] + v[1]); }\n}' },
+        { id:'kotlin', name:'Kotlin 2.1', judge0Id:111, ext:'kt',
+          example:'import java.util.Scanner\nfun main() {\n    val sc = Scanner(System.`in`)\n    if (sc.hasNextInt()) {\n        val a = sc.nextInt(); val b = sc.nextInt()\n        println(a + b)\n    }\n}' },
+        { id:'swift', name:'Swift', judge0Id:83, ext:'swift',
+          example:'import Foundation\nlet parts = readLine()!.split(separator: " ").compactMap { Int($0) }\nif parts.count >= 2 { print(parts[0] + parts[1]) }' },
+        { id:'ruby', name:'Ruby', judge0Id:72, ext:'rb',
+          example:'nums = STDIN.read.split.map(&:to_i)\nputs nums.sum' },
+        { id:'php', name:'PHP 8.3', judge0Id:98, ext:'php',
+          example:'<?php\n$nums = array_map("intval", explode(" ", trim(fgets(STDIN))));\necho array_sum($nums) . "\\n";\n?>' },
+        { id:'csharp', name:'C# (Mono)', judge0Id:51, ext:'cs',
+          example:'using System;\nclass Program {\n    static void Main() {\n        var parts = Console.ReadLine().Split();\n        if (parts.Length >= 2) {\n            int a = int.Parse(parts[0]), b = int.Parse(parts[1]);\n            Console.WriteLine(a + b);\n        }\n    }\n}' },
+        { id:'scala', name:'Scala', judge0Id:81, ext:'scala',
+          example:'object Main extends App {\n    val nums = scala.io.StdIn.readLine().split(" ").map(_.toInt)\n    println(nums.sum)\n}' },
+        { id:'perl', name:'Perl', judge0Id:85, ext:'pl',
+          example:'my $line = <STDIN>;\nchomp $line;\nmy @nums = split / /, $line;\nmy $sum = 0;\n$sum += $_ for @nums;\nprint "$sum\\n";' },
+        { id:'lua', name:'Lua 5.4', judge0Id:64, ext:'lua',
+          example:'local line = io.read()\nlocal sum = 0\nfor n in line:gmatch("%d+") do\n    sum = sum + tonumber(n)\nend\nprint(sum)' },
+        { id:'bash', name:'Bash', judge0Id:46, ext:'sh',
+          example:'read -r line\nsum=0\nfor n in $line; do\n  sum=$((sum + n))\ndone\necho $sum' },
+        { id:'r', name:'R', judge0Id:80, ext:'r',
+          example:'con <- file("stdin", "r")\nline <- readLines(con, n=1)\nnums <- as.numeric(strsplit(line, " ")[[1]])\ncat(sum(nums), "\\n")' },
+        { id:'dart', name:'Dart', judge0Id:90, ext:'dart',
+          example:'import "dart:io";\nvoid main() {\n    final line = stdin.readLineSync() ?? "";\n    final nums = line.split(" ").map(int.parse).toList();\n    print(nums.reduce((a, b) => a + b));\n}' },
+        { id:'haskell', name:'Haskell', judge0Id:61, ext:'hs',
+          example:'main = do\n    line <- getLine\n    print $ sum $ map read $ words line' },
+        { id:'clojure', name:'Clojure', judge0Id:86, ext:'clj',
+          example:'(println (apply + (map #(Integer/parseInt %) (clojure.string/split (read-line) #" "))))' },
+        { id:'elixir', name:'Elixir', judge0Id:57, ext:'ex',
+          example:'line = IO.gets("") |> String.trim()\nsum = line |> String.split() |> Enum.map(&String.to_integer/1) |> Enum.sum()\nIO.puts(sum)' },
+        { id:'erlang', name:'Erlang', judge0Id:58, ext:'erl',
+          example:'-module(main).\n-export([main/0]).\nmain() ->\n    {ok, [Line]} = io:fread("", "~s"),\n    Nums = [list_to_integer(X) || X <- string:lexemes(Line, " ")],\n    io:format("~p~n", [lists:sum(Nums)]).' },
+        { id:'ocaml', name:'OCaml', judge0Id:65, ext:'ml',
+          example:'let () =\n  let line = input_line stdin in\n  let nums = String.split_on_char \' \' line |> List.map int_of_string in\n  Printf.printf "%d\\n" (List.fold_left (+) 0 nums)' },
+        { id:'fsharp', name:'F#', judge0Id:87, ext:'fs',
+          example:'open System\n[<EntryPoint>]\nlet main _ =\n    let nums = Console.ReadLine().Split() |> Array.map int\n    printfn "%d" (Array.sum nums)\n    0' },
+        { id:'groovy', name:'Groovy', judge0Id:88, ext:'groovy',
+          example:'def nums = System.in.text.trim().split(" ").collect { it as int }\nprintln nums.sum()' },
+        { id:'fortran', name:'Fortran', judge0Id:59, ext:'f90',
+          example:'program main\n    implicit none\n    integer :: a, b\n    read(*,*) a, b\n    write(*,*) a + b\nend program main' },
+        { id:'pascal', name:'Pascal', judge0Id:67, ext:'pas',
+          example:'program main;\nvar a, b: integer;\nbegin\n    readln(a, b);\n    writeln(a + b);\nend.' },
+        { id:'asm', name:'Assembly (NASM)', judge0Id:45, ext:'asm',
+          example:'; 简化示例：退出码 0\nsection .text\nglobal _start\n_start:\n    mov eax, 60\n    xor edi, edi\n    syscall' }
+    ];
+
+    // ============================================================
+    // DOM
+    // ============================================================
+    const langSelect = document.getElementById('langSelect');
+    const runBtn = document.getElementById('runBtn');
+    const judgeBtn = document.getElementById('judgeBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const exampleBtn = document.getElementById('exampleBtn');
+    const copyOutputBtn = document.getElementById('copyOutputBtn');
+    const codeEditor = document.getElementById('codeEditor');
+    const outputView = document.getElementById('outputView');
+    const outputTitle = document.getElementById('outputTitle');
+    const previewContainer = document.getElementById('previewContainer');
+    const previewFrame = document.getElementById('previewFrame');
+    const engineBadge = document.getElementById('engineBadge');
+    const statusText = document.getElementById('statusText');
+    const timeText = document.getElementById('timeText');
+    const speedText = document.getElementById('speedText');
+    const toast = document.getElementById('toast');
+    const samplesPanel = document.getElementById('samplesPanel');
+    const samplesHeader = document.getElementById('samplesHeader');
+    const addSampleBtn = document.getElementById('addSampleBtn');
+    const sampleList = document.getElementById('sampleList');
+    const emptySamples = document.getElementById('emptySamples');
+    const sampleCount = document.getElementById('sampleCount');
+    const summaryBadge = document.getElementById('summaryBadge');
+    const modeDesc = document.getElementById('modeDesc');
+
+    let currentLang = LANGUAGES[0];
+    let samples = [];
+    let currentMode = 'acm';
+    let sampleIdCounter = 1;
+
+    // ============================================================
+    // 初始化
+    // ============================================================
+    LANGUAGES.forEach(l => {
+        const opt = document.createElement('option');
+        opt.value = l.id;
+        opt.textContent = l.name;
+        langSelect.appendChild(opt);
+    });
+
+    function loadLanguage(langId) {
+        currentLang = LANGUAGES.find(l => l.id === langId) || LANGUAGES[0];
+        codeEditor.value = currentLang.example;
+        outputView.innerHTML = '';
+        previewFrame.srcdoc = '';
+        const isPreview = currentLang.mode === 'preview';
+        outputView.style.display = isPreview ? 'none' : 'block';
+        previewContainer.classList.toggle('active', isPreview);
+        outputTitle.textContent = isPreview ? '🖥 页面预览' : '📤 运行输出';
+        if (isPreview) {
+            engineBadge.textContent = '引擎：浏览器渲染 (即时)';
+            engineBadge.className = 'badge local';
+        } else {
+            engineBadge.textContent = '引擎：Judge0 CE (远程)';
+            engineBadge.className = 'badge remote';
+        }
+        statusText.textContent = '就绪';
+        timeText.textContent = '';
+        speedText.textContent = '';
+    }
+
+    langSelect.addEventListener('change', () => loadLanguage(langSelect.value));
+    exampleBtn.addEventListener('click', () => { codeEditor.value = currentLang.example; showToast('已加载示例'); });
+    clearBtn.addEventListener('click', () => {
+        outputView.innerHTML = '';
+        previewFrame.srcdoc = '';
+        statusText.textContent = '已清空';
+        timeText.textContent = '';
+        speedText.textContent = '';
+        summaryBadge.style.display = 'none';
+    });
+
+    // ============================================================
+    // 赛制切换
+    // ============================================================
+    document.querySelectorAll('.mode-option').forEach(opt => {
+        opt.addEventListener('click', () => {
+            document.querySelectorAll('.mode-option').forEach(o => o.classList.remove('active'));
+            opt.classList.add('active');
+            currentMode = opt.dataset.mode;
+            modeDesc.textContent = currentMode === 'acm'
+                ? 'ACM：所有测试点必须全部通过才算 AC，任一失败即整题 WA'
+                : 'OI：每个测试点按独立分值给分，汇总显示总分与百分比';
+            samples.forEach(s => { s.status = null; s.actual = null; s.score = null; });
+            renderSamples();
+            summaryBadge.style.display = 'none';
+        });
+    });
+
+    // ============================================================
+    // 输出工具
+    // ============================================================
+    function appendOutput(text, cls) {
+        const span = document.createElement('span');
+        if (cls) span.className = cls;
+        span.textContent = text;
+        outputView.appendChild(span);
+        outputView.scrollTop = outputView.scrollHeight;
+    }
+    function appendLine(text, cls) { appendOutput(text + '\n', cls); }
+
+    // ============================================================
+    // 自由运行（单次提交，激进轮询）
+    // ============================================================
+    runBtn.addEventListener('click', async () => {
+        const code = codeEditor.value;
+        if (!code.trim()) { showToast('代码为空'); return; }
+        outputView.innerHTML = '';
+        previewFrame.srcdoc = '';
+        runBtn.disabled = true;
+        statusText.textContent = '运行中...';
+        timeText.textContent = '';
+        speedText.textContent = '';
+        const t0 = performance.now();
+        try {
+            if (currentLang.mode === 'preview') {
+                previewFrame.srcdoc = code;
+                statusText.textContent = '✅ 已渲染预览';
+            } else {
+                const token = await createSubmission(code, '');
+                appendLine(`token: ${token}\n`, 'cmd');
+                appendLine('编译/运行中...\n', 'info');
+                const result = await pollSingleFast(token);
+                displayJudge0Result(result);
+            }
+        } catch (e) {
+            appendLine('\n[运行异常] ' + e.message, 'err');
+            statusText.textContent = '异常';
+        } finally {
+            const ms = Math.round(performance.now() - t0);
+            timeText.textContent = `耗时 ${ms} ms`;
+            speedText.textContent = ms < 500 ? '⚡ 快速' : (ms < 2000 ? '🚀 中等' : '🐢 远程延迟');
+            runBtn.disabled = false;
+        }
+    });
+
+    // ============================================================
+    // 判题（Batch API）
+    // ============================================================
+    judgeBtn.addEventListener('click', async () => {
+        const code = codeEditor.value;
+        if (!code.trim()) { showToast('代码为空'); return; }
+        if (samples.length === 0) { showToast('请先添加测试样例'); return; }
+
+        judgeBtn.disabled = true;
+        outputView.innerHTML = '';
+        summaryBadge.style.display = 'none';
+        samples.forEach(s => { s.status = null; s.actual = null; s.score = null; });
+        renderSamples();
+        appendLine(`▶ 开始判题（${currentMode.toUpperCase()}，Batch 提交 ${samples.length} 个测试点）...\n`, 'info');
+        const t0 = performance.now();
+
+        try {
+            // 构建 batch 请求体
+            const submissions = samples.map(s => ({
+                source_code: code,
+                language_id: currentLang.judge0Id,
+                stdin: s.input || ''
+            }));
+            appendLine('📦 打包提交中...', 'info');
+            const tokens = await createBatchSubmissions(submissions);
+            appendLine(`✅ 已提交，获得 ${tokens.length} 个 token\n`, 'ok');
+            appendLine('⏳ 批量查询结果中...\n', 'info');
+
+            // 批量轮询
+            const results = await pollBatchFast(tokens);
+
+            // 逐个比对
+            for (let i = 0; i < samples.length; i++) {
+                const s = samples[i];
+                const result = results[i];
+                if (!result) { s.status = 'error'; s.actual = '无结果'; s.score = 0; continue; }
+
+                if (result.status && result.status.id === 6) {
+                    s.status = 'error';
+                    s.actual = result.compile_output || '编译错误';
+                    s.score = 0;
+                    continue;
+                }
+                const actual = (result.stdout || '') + (result.stderr ? '\n[stderr] ' + result.stderr : '');
+                s.actual = actual;
+                const pass = normalize(s.expected) === normalize(actual);
+                s.status = pass ? 'pass' : 'fail';
+                s.score = pass ? (currentMode === 'oi' ? (s.weight || 0) : null) : 0;
+            }
+            renderSamples();
+
+            // 汇总
+            const total = samples.length;
+            const passed = samples.filter(x => x.status === 'pass').length;
+            summaryBadge.style.display = 'inline-block';
+
+            if (currentMode === 'acm') {
+                const ac = passed === total;
+                summaryBadge.textContent = ac ? `AC · ${passed}/${total}` : `WA · ${passed}/${total}`;
+                summaryBadge.className = 'summary-badge ' + (ac ? 'ac' : 'wa');
+                appendLine(`\n📊 ACM 结果：${ac ? '✅ AC' : '❌ WA'}（${passed}/${total} 通过）`, ac ? 'ok' : 'err');
+            } else {
+                const totalWeight = samples.reduce((a, s) => a + (s.weight || 0), 0);
+                const gotWeight = samples.filter(x => x.status === 'pass').reduce((a, s) => a + (s.weight || 0), 0);
+                const pct = totalWeight > 0 ? Math.round(gotWeight / totalWeight * 100) : 0;
+                summaryBadge.textContent = `得分 ${gotWeight}/${totalWeight} · ${pct}%`;
+                summaryBadge.className = 'summary-badge ' + (pct === 100 ? 'ac' : (pct > 0 ? 'partial' : 'wa'));
+                appendLine(`\n📊 OI 结果：得分 ${gotWeight} / ${totalWeight}（${pct}%）`, pct === 100 ? 'ok' : (pct > 0 ? 'warn' : 'err'));
+            }
+        } catch (e) {
+            appendLine(`\n[判题异常] ${e.message}`, 'err');
+        } finally {
+            const ms = Math.round(performance.now() - t0);
+            timeText.textContent = `耗时 ${ms} ms`;
+            judgeBtn.disabled = false;
+            statusText.textContent = '判题完成';
+        }
+    });
+
+    function normalize(str) {
+        return String(str || '').trim().replace(/\s+/g, ' ');
+    }
+
+    // ============================================================
+    // Judge0 API 调用
+    // ============================================================
+    const JUDGE0_BASE = 'https://ce.judge0.com';
+
+    async function createSubmission(code, stdin) {
+        const resp = await fetch(`${JUDGE0_BASE}/submissions?base64_encoded=false&wait=false`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source_code: code, language_id: currentLang.judge0Id, stdin: stdin || '' })
+        });
+        if (!resp.ok) {
+            const text = await resp.text();
+            throw new Error(`提交失败 (HTTP ${resp.status}): ${text.substring(0, 150)}`);
+        }
+        const data = await resp.json();
+        if (!data.token) throw new Error('未获取到 token');
+        return data.token;
+    }
+
+    async function createBatchSubmissions(submissions) {
+        const resp = await fetch(`${JUDGE0_BASE}/submissions/batch?base64_encoded=false`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ submissions })
+        });
+        if (!resp.ok) {
+            const text = await resp.text();
+            throw new Error(`批量提交失败 (HTTP ${resp.status}): ${text.substring(0, 150)}`);
+        }
+        const data = await resp.json();
+        return data.map(item => item.token);
+    }
+
+    // 单次轮询（激进策略：50ms 起，指数退避至 800ms）
+    async function pollSingleFast(token, maxTries = 40) {
+        let delay = 50;
+        for (let i = 0; i < maxTries; i++) {
+            await sleep(delay);
+            const resp = await fetch(`${JUDGE0_BASE}/submissions/${token}?base64_encoded=false`);
+            if (!resp.ok) throw new Error(`查询失败 (HTTP ${resp.status})`);
+            const data = await resp.json();
+            if (data.status && data.status.id >= 3) return data;
+            delay = Math.min(delay * 1.4, 800);
+        }
+        throw new Error('轮询超时');
+    }
+
+    // 批量轮询：一次请求查询所有 token
+    async function pollBatchFast(tokens, maxTries = 40) {
+        const tokensStr = tokens.join(',');
+        let delay = 100;
+        for (let i = 0; i < maxTries; i++) {
+            await sleep(delay);
+            const resp = await fetch(`${JUDGE0_BASE}/submissions/batch?tokens=${tokensStr}&base64_encoded=false`);
+            if (!resp.ok) throw new Error(`批量查询失败 (HTTP ${resp.status})`);
+            const data = await resp.json();
+            const subs = data.submissions || [];
+            // 检查是否全部完成（status.id >= 3）
+            const allDone = subs.every(s => s.status && s.status.id >= 3);
+            if (allDone && subs.length === tokens.length) {
+                // 按原始 token 顺序返回
+                const map = {};
+                subs.forEach(s => { map[s.token] = s; });
+                return tokens.map(t => map[t] || null);
+            }
+            delay = Math.min(delay * 1.3, 1000);
+        }
+        throw new Error('批量轮询超时');
+    }
+
+    function displayJudge0Result(data) {
+        const status = data.status || {};
+        const desc = status.description || '未知状态';
+        if (status.id === 3) appendLine(`\n✅ ${desc}\n`, 'ok');
+        else if (status.id === 6) appendLine(`\n❌ ${desc}\n`, 'err');
+        else appendLine(`\n⚠️ ${desc}\n`, 'err');
+        if (data.compile_output) { appendLine('--- 编译输出 ---', 'cmd'); appendLine(data.compile_output); }
+        if (data.stdout) { appendLine('--- 标准输出 ---', 'cmd'); appendLine(data.stdout); }
+        if (data.stderr) { appendLine('--- 标准错误 ---', 'cmd'); appendLine(data.stderr, 'err'); }
+        if (data.message) { appendLine('--- 消息 ---', 'cmd'); appendLine(data.message); }
+        if (data.time) appendLine(`\n执行时间: ${data.time} s`, 'info');
+        if (data.memory) appendLine(`内存占用: ${data.memory} KB`, 'info');
+        statusText.textContent = status.id === 3 ? '✅ 运行成功' : `状态：${desc}`;
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    // ============================================================
+    // 样例管理
+    // ============================================================
+    function addSample() {
+        const s = { id: sampleIdCounter++, desc:'', input:'', expected:'', weight:10, status:null, actual:null, score:null };
+        samples.push(s);
+        renderSamples();
+        showToast('已添加测试点');
+    }
+
+    function deleteSample(id) {
+        samples = samples.filter(s => s.id !== id);
+        renderSamples();
+    }
+
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function renderSamples() {
+        sampleCount.textContent = samples.length;
+        emptySamples.style.display = samples.length === 0 ? 'block' : 'none';
+        sampleList.innerHTML = '';
+
+        samples.forEach((s, idx) => {
+            const div = document.createElement('div');
+            div.className = 'sample-item';
+
+            let dotCls = '';
+            if (s.status === 'pass') dotCls = 'pass';
+            else if (s.status === 'fail' || s.status === 'error') dotCls = 'fail';
+            else if (s.status === 'wait') dotCls = 'wait';
+            const dotHtml = dotCls ? `<span class="status-dot ${dotCls}"></span>` : '';
+
+            const weightHtml = currentMode === 'oi' ? `
+                <div class="field">
+                    <label>⚖️ 分值</label>
+                    <input type="number" data-field="weight" data-id="${s.id}" value="${s.weight}" min="0" max="100">
+                </div>` : '';
+
+            let resultRow = '';
+            if (s.status) {
+                const label = s.status === 'pass' ? '✓ 通过' :
+                             s.status === 'fail' ? '✗ 失败' :
+                             s.status === 'wait' ? '⏳ 运行中' : '❌ 错误';
+                const scoreText = s.score !== null && s.score !== undefined ? ` · 得分 ${s.score}` : '';
+                resultRow = `
+                    <div class="result-row">
+                        <div class="result-cell ${s.status === 'pass' ? 'ok' : 'err'}">
+                            <span class="lbl">${label}${scoreText}</span>
+                            <pre>期望: ${escapeHtml(s.expected.trim().substring(0, 80))}</pre>
+                            <pre>实际: ${escapeHtml((s.actual || '').trim().substring(0, 80))}</pre>
+                        </div>
+                    </div>`;
+            }
+
+            div.innerHTML = `
+                <div class="field idx"><div>#${idx + 1}</div>${dotHtml}</div>
+                <div class="field"><label>📥 输入数据（stdin）</label><textarea data-field="input" data-id="${s.id}" placeholder="如：1 2">${escapeHtml(s.input)}</textarea></div>
+                <div class="field"><label>📤 期望输出</label><textarea data-field="expected" data-id="${s.id}" placeholder="如：3">${escapeHtml(s.expected)}</textarea></div>
+                ${weightHtml}
+                <div class="ops"><button class="del" data-action="del" data-id="${s.id}">✕ 删除</button></div>
+                ${resultRow}
+            `;
+            sampleList.appendChild(div);
+        });
+
+        sampleList.querySelectorAll('textarea, input[type="number"]').forEach(el => {
+            el.addEventListener('input', e => {
+                const id = parseInt(e.target.dataset.id);
+                const field = e.target.dataset.field;
+                const s = samples.find(x => x.id === id);
+                if (s) {
+                    s[field] = field === 'weight' ? Math.max(0, parseInt(e.target.value) || 0) : e.target.value;
+                    if (field === 'input' || field === 'expected') {
+                        s.status = null; s.actual = null; s.score = null;
+                    }
+                }
+            });
+        });
+
+        sampleList.querySelectorAll('button[data-action]').forEach(btn => {
+            btn.addEventListener('click', e => {
+                const id = parseInt(e.target.dataset.id);
+                if (e.target.dataset.action === 'del') deleteSample(id);
+            });
+        });
+    }
+
+    addSampleBtn.addEventListener('click', addSample);
+    samplesHeader.addEventListener('click', e => {
+        if (e.target.closest('button')) return;
+        samplesPanel.classList.toggle('open');
+    });
+
+    copyOutputBtn.addEventListener('click', () => {
+        const isPreview = currentLang.mode === 'preview';
+        const text = isPreview ? codeEditor.value : outputView.textContent;
+        if (!text) { showToast('内容为空'); return; }
+        navigator.clipboard.writeText(text).then(() => showToast(isPreview ? '✅ 已复制源码' : '✅ 已复制输出')).catch(() => {
+            const ta = document.createElement('textarea');
+            ta.value = text; document.body.appendChild(ta); ta.select();
+            document.execCommand('copy'); document.body.removeChild(ta);
+            showToast('✅ 已复制');
+        });
+    });
+
+    function showToast(msg) {
+        toast.textContent = msg; toast.classList.add('show');
+        clearTimeout(window._t);
+        window._t = setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    loadLanguage('cpp');
+    samples.push({ id: sampleIdCounter++, desc:'', input:'1 2', expected:'3', weight:10, status:null, actual:null, score:null });
+    samples.push({ id: sampleIdCounter++, desc:'', input:'10 20', expected:'30', weight:10, status:null, actual:null, score:null });
+    renderSamples();
+})();
+</script>
+</body>
+</html>
